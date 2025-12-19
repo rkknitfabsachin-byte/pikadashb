@@ -11,61 +11,56 @@ body{
   font-family:Inter,system-ui;
   background:#f1f5f9;
 }
-.wrap{max-width:1300px;margin:auto;padding:16px;}
+.wrap{max-width:1300px;margin:auto;padding:14px;}
 h1{margin-bottom:12px}
 
-.cards{
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:12px;
-}
-.card{
-  background:white;
-  padding:16px;
-  border-radius:16px;
-  box-shadow:0 10px 25px rgba(0,0,0,.08);
-}
-.card h3{margin:0;font-size:14px;color:#64748b}
-.card p{margin:6px 0 0;font-size:22px;font-weight:700}
-
-.filters{
-  margin:20px 0;
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:10px;
-}
-.filters input,.filters select{
-  padding:10px;
-  border-radius:10px;
-  border:1px solid #cbd5e1;
-}
-
-table{
-  width:100%;
-  border-collapse:collapse;
+.piCard{
   background:white;
   border-radius:16px;
+  box-shadow:0 8px 22px rgba(0,0,0,.08);
+  margin-bottom:14px;
   overflow:hidden;
 }
-th{
-  background:#e2e8f0;
-  padding:10px;
+
+.piHead{
+  display:grid;
+  grid-template-columns:1fr 1.5fr 1fr 1fr 1fr 1fr auto;
+  gap:10px;
+  padding:14px;
+  align-items:center;
   font-size:13px;
 }
-td{
+.piHead strong{font-size:14px}
+
+.piItems{
+  display:none;
+  border-top:1px solid #e5e7eb;
+}
+
+.piItems table{
+  width:100%;
+  border-collapse:collapse;
+}
+.piItems th,.piItems td{
   padding:10px;
   font-size:13px;
   border-bottom:1px solid #e5e7eb;
   text-align:center;
 }
+.piItems th{background:#f1f5f9}
+
+.toggle{
+  cursor:pointer;
+  font-size:18px;
+}
+
 a{color:#2563eb;text-decoration:none}
 
 @media(max-width:900px){
-  .cards{grid-template-columns:repeat(2,1fr)}
-  .filters{grid-template-columns:1fr 1fr}
-}
-@media(max-width:500px){
-  .cards,.filters{grid-template-columns:1fr}
+  .piHead{
+    grid-template-columns:1fr 1fr;
+    row-gap:6px;
+  }
 }
 </style>
 </head>
@@ -74,80 +69,102 @@ a{color:#2563eb;text-decoration:none}
 <div class="wrap">
 <h1>Proforma Invoice Dashboard</h1>
 
-<div class="cards">
-  <div class="card"><h3>Total PIs</h3><p id="c1">0</p></div>
-  <div class="card"><h3>Total Qty</h3><p id="c2">0</p></div>
-  <div class="card"><h3>Total Amount</h3><p id="c3">0</p></div>
-  <div class="card"><h3>Grand Total</h3><p id="c4">0</p></div>
-</div>
-
-<div class="filters">
-  <input id="fParty" placeholder="Party name">
-  <input type="date" id="fFrom">
-  <input type="date" id="fTo">
-  <select id="fPriority">
-    <option value="">Priority</option>
-    <option>High</option>
-    <option>Medium</option>
-    <option>Low</option>
-  </select>
-</div>
-
-<table>
-<thead>
-<tr>
-<th>Date</th><th>Party</th><th>Item</th><th>Qty</th>
-<th>Rate</th><th>Amount</th><th>GST</th><th>Total</th><th>PDF</th>
-</tr>
-</thead>
-<tbody id="tbody"></tbody>
-</table>
+<div id="list"></div>
 </div>
 
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbwX0Nw7eLYhD1uQaNrSXr80CMnugOHU3PGccZmbtiNqC5C72hboQCbYPOg7ee1on3RX/exec";
-let DATA=[];
 
-fetch(API_URL).then(r=>r.json()).then(d=>{
-  DATA=d;
-  render(DATA);
+fetch(API_URL).then(r=>r.json()).then(rows=>{
+  const grouped = groupByPI(rows);
+  render(grouped);
 });
 
 function fmt(d){
   if(!d) return "";
-  let dt=new Date(d);
-  return dt.toLocaleDateString("en-GB");
+  return new Date(d).toLocaleDateString("en-GB");
 }
 
-function render(rows){
-  let tb=document.getElementById("tbody");
-  tb.innerHTML="";
-  let tq=0,ta=0,tg=0;
-
+function groupByPI(rows){
+  const map = {};
   rows.forEach(r=>{
-    tq+=+r.Qty||0;
-    ta+=+r.Amount||0;
-    tg+=+r["Grand Total"]||0;
+    const pi = r["PI No"];
+    if(!map[pi]){
+      map[pi] = {
+        piNo: pi,
+        date: r.Date,
+        party: r["Party Name"],
+        subtotal: r.Subtotal,
+        gst: r.GST_5pct,
+        grand: r["Grand Total"],
+        pdf: r["PDF Link"],
+        items: [],
+        totalQty: 0
+      };
+    }
+    map[pi].items.push({
+      item:r.Item,
+      color:r.Color,
+      gsm:r.GSM,
+      dia:r.DIA,
+      qty:r.Qty,
+      rate:r.Rate,
+      amount:r.Amount
+    });
+    map[pi].totalQty += Number(r.Qty||0);
+  });
+  return Object.values(map);
+}
 
-    tb.insertAdjacentHTML("beforeend",`
-      <tr>
-        <td>${fmt(r.Date)}</td>
-        <td>${r["Party Name"]}</td>
-        <td>${r.Item}</td>
-        <td>${r.Qty}</td>
-        <td>${r.Rate}</td>
-        <td>${r.Amount}</td>
-        <td>${r.GST_5pct}</td>
-        <td>${r["Grand Total"]}</td>
-        <td>${r["PDF Link"] ? `<a href="${r["PDF Link"]}" target="_blank">View</a>`:""}</td>
-      </tr>
+function render(data){
+  const box=document.getElementById("list");
+  box.innerHTML="";
+
+  data.forEach((pi,i)=>{
+    const id="pi_"+i;
+    box.insertAdjacentHTML("beforeend",`
+      <div class="piCard">
+        <div class="piHead">
+          <strong>${pi.piNo}</strong>
+          <div>${pi.party}</div>
+          <div>${fmt(pi.date)}</div>
+          <div>Items: ${pi.items.length}</div>
+          <div>Qty: ${pi.totalQty}</div>
+          <div>₹ ${pi.grand}</div>
+          <div class="toggle" onclick="toggle('${id}')">▾</div>
+        </div>
+
+        <div class="piItems" id="${id}">
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th><th>Color</th><th>GSM</th><th>DIA</th>
+                <th>Qty</th><th>Rate</th><th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${pi.items.map(it=>`
+                <tr>
+                  <td>${it.item}</td>
+                  <td>${it.color}</td>
+                  <td>${it.gsm}</td>
+                  <td>${it.dia}</td>
+                  <td>${it.qty}</td>
+                  <td>${it.rate}</td>
+                  <td>${it.amount}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
     `);
   });
+}
 
-  c1.innerText=rows.length;
-  c2.innerText=tq;
-  c3.innerText=ta;
-  c4.innerText=tg;
+function toggle(id){
+  const el=document.getElementById(id);
+  el.style.display = el.style.display==="block" ? "none" : "block";
 }
 </script>
 </body>
