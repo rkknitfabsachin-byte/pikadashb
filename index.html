@@ -45,6 +45,22 @@ h1{margin-bottom:10px}
 }
 .piHead strong{font-size:14px}
 
+.actions{
+  display:flex;
+  gap:6px;
+}
+
+.btn{
+  padding:6px 10px;
+  border-radius:8px;
+  font-size:12px;
+  border:none;
+  cursor:pointer;
+  background:#2563eb;
+  color:white;
+}
+.btn.download{background:#16a34a}
+
 .piItems{
   display:none;
   border-top:1px solid #e5e7eb;
@@ -97,13 +113,11 @@ h1{margin-bottom:10px}
 
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbwX0Nw7eLYhD1uQaNrSXr80CMnugOHU3PGccZmbtiNqC5C72hboQCbYPOg7ee1on3RX/exec";
-let RAW = [];
 let GROUPED = [];
 
 fetch(API_URL)
   .then(r=>r.json())
   .then(rows=>{
-    RAW = rows;
     GROUPED = groupByPI(rows);
     render(GROUPED);
   });
@@ -111,6 +125,12 @@ fetch(API_URL)
 function fmt(d){
   if(!d) return "";
   return new Date(d).toLocaleDateString("en-GB");
+}
+
+function getDownloadLink(url){
+  if(!url) return "";
+  const m = url.match(/\/d\/([^\/]+)/);
+  return m ? `https://drive.google.com/uc?export=download&id=${m[1]}` : url;
 }
 
 function groupByPI(rows){
@@ -122,8 +142,6 @@ function groupByPI(rows){
         piNo: pi,
         date: r.Date,
         party: r["Party Name"],
-        subtotal: r.Subtotal,
-        gst: r.GST_5pct,
         grand: r["Grand Total"],
         pdf: r["PDF Link"],
         items: [],
@@ -144,25 +162,24 @@ function groupByPI(rows){
   return Object.values(map);
 }
 
-/* ===== FILTER LOGIC ===== */
+/* ===== FILTERS ===== */
 ["fPI","fParty","fFrom","fTo"].forEach(id=>{
   document.getElementById(id).addEventListener("input",applyFilters);
 });
 
 function applyFilters(){
-  const piVal = fPI.value.toLowerCase();
-  const partyVal = fParty.value.toLowerCase();
-  const from = fFrom.value ? new Date(fFrom.value) : null;
-  const to = fTo.value ? new Date(fTo.value) : null;
+  const piVal=fPI.value.toLowerCase();
+  const partyVal=fParty.value.toLowerCase();
+  const from=fFrom.value?new Date(fFrom.value):null;
+  const to=fTo.value?new Date(fTo.value):null;
 
   const filtered = GROUPED.filter(pi=>{
     if(piVal && !String(pi.piNo).toLowerCase().includes(piVal)) return false;
     if(partyVal && !pi.party.toLowerCase().includes(partyVal)) return false;
-
     if(from || to){
-      const d = new Date(pi.date);
-      if(from && d < from) return false;
-      if(to && d > to) return false;
+      const d=new Date(pi.date);
+      if(from && d<from) return false;
+      if(to && d>to) return false;
     }
     return true;
   });
@@ -182,6 +199,8 @@ function render(data){
 
   data.forEach((pi,i)=>{
     const id="pi_"+i;
+    const dl=getDownloadLink(pi.pdf);
+
     box.insertAdjacentHTML("beforeend",`
       <div class="piCard">
         <div class="piHead">
@@ -191,6 +210,14 @@ function render(data){
           <div>Items: ${pi.items.length}</div>
           <div>Qty: ${pi.totalQty}</div>
           <div>₹ ${pi.grand}</div>
+
+          <div class="actions">
+            ${pi.pdf ? `
+              <a href="${pi.pdf}" target="_blank"><button class="btn">View</button></a>
+              <a href="${dl}"><button class="btn download">⬇</button></a>
+            `:""}
+          </div>
+
           <div class="toggle" onclick="toggle('${id}')">▾</div>
         </div>
 
