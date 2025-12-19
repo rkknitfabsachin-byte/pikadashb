@@ -12,7 +12,20 @@ body{
   background:#f1f5f9;
 }
 .wrap{max-width:1300px;margin:auto;padding:14px;}
-h1{margin-bottom:12px}
+h1{margin-bottom:10px}
+
+.filters{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr 1fr;
+  gap:10px;
+  margin-bottom:14px;
+}
+.filters input{
+  padding:10px;
+  border-radius:10px;
+  border:1px solid #cbd5e1;
+  font-size:13px;
+}
 
 .piCard{
   background:white;
@@ -54,13 +67,15 @@ h1{margin-bottom:12px}
   font-size:18px;
 }
 
-a{color:#2563eb;text-decoration:none}
-
 @media(max-width:900px){
+  .filters{grid-template-columns:1fr 1fr}
   .piHead{
     grid-template-columns:1fr 1fr;
     row-gap:6px;
   }
+}
+@media(max-width:500px){
+  .filters{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -69,16 +84,29 @@ a{color:#2563eb;text-decoration:none}
 <div class="wrap">
 <h1>Proforma Invoice Dashboard</h1>
 
+<!-- FILTERS -->
+<div class="filters">
+  <input id="fPI" placeholder="Filter PI No">
+  <input id="fParty" placeholder="Filter Party">
+  <input type="date" id="fFrom">
+  <input type="date" id="fTo">
+</div>
+
 <div id="list"></div>
 </div>
 
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbwX0Nw7eLYhD1uQaNrSXr80CMnugOHU3PGccZmbtiNqC5C72hboQCbYPOg7ee1on3RX/exec";
+let RAW = [];
+let GROUPED = [];
 
-fetch(API_URL).then(r=>r.json()).then(rows=>{
-  const grouped = groupByPI(rows);
-  render(grouped);
-});
+fetch(API_URL)
+  .then(r=>r.json())
+  .then(rows=>{
+    RAW = rows;
+    GROUPED = groupByPI(rows);
+    render(GROUPED);
+  });
 
 function fmt(d){
   if(!d) return "";
@@ -116,9 +144,41 @@ function groupByPI(rows){
   return Object.values(map);
 }
 
+/* ===== FILTER LOGIC ===== */
+["fPI","fParty","fFrom","fTo"].forEach(id=>{
+  document.getElementById(id).addEventListener("input",applyFilters);
+});
+
+function applyFilters(){
+  const piVal = fPI.value.toLowerCase();
+  const partyVal = fParty.value.toLowerCase();
+  const from = fFrom.value ? new Date(fFrom.value) : null;
+  const to = fTo.value ? new Date(fTo.value) : null;
+
+  const filtered = GROUPED.filter(pi=>{
+    if(piVal && !String(pi.piNo).toLowerCase().includes(piVal)) return false;
+    if(partyVal && !pi.party.toLowerCase().includes(partyVal)) return false;
+
+    if(from || to){
+      const d = new Date(pi.date);
+      if(from && d < from) return false;
+      if(to && d > to) return false;
+    }
+    return true;
+  });
+
+  render(filtered);
+}
+
+/* ===== RENDER ===== */
 function render(data){
   const box=document.getElementById("list");
   box.innerHTML="";
+
+  if(!data.length){
+    box.innerHTML="<p style='text-align:center;color:#64748b'>No records found</p>";
+    return;
+  }
 
   data.forEach((pi,i)=>{
     const id="pi_"+i;
